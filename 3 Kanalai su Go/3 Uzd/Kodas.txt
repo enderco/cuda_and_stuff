@@ -1,0 +1,63 @@
+package main
+
+import "fmt"
+
+var dataSize int = 1000
+
+func main() {
+	var threadCount int = dataSize / 100
+	var sumArray [10]float64
+	var averageArray [10]float64
+
+	sumChan := make(chan float64)
+	allSumsInOneChan := make(chan float64)
+	sendBackSumOfSums := make(chan float64)
+
+	for threadNumber := 0; threadNumber < threadCount; threadNumber++ {
+		go WorkerThread(threadNumber, sumChan, allSumsInOneChan)
+	}
+	go CalculateAllSums(allSumsInOneChan, sendBackSumOfSums)
+
+	for i := 0; i < threadCount; i++ {
+		sum := <-sumChan
+		average := sum / 100
+
+		sumArray[i] = sum
+		averageArray[i] = average
+	}
+
+	close(allSumsInOneChan)
+	sumOfSums := <-sendBackSumOfSums
+	close(sumChan)
+	close(sendBackSumOfSums)
+
+	for i := 0; i < 10; i++ {
+		fmt.Println("Gauta suma:", sumArray[i])
+		fmt.Println("Gautas vidurkis sumos:", averageArray[i])
+		fmt.Println()
+	}
+
+	fmt.Println("Visos sumos susumuotos rezultatas:", sumOfSums)
+
+}
+
+func WorkerThread(threadNumber int, sumChannel chan float64, allSumsInOne chan float64) {
+	var sum float64 = 0
+	var numberOfNumbersForEachThread int = 100
+
+	for i := threadNumber * numberOfNumbersForEachThread; i < (threadNumber+1)*numberOfNumbersForEachThread; i++ {
+		sum += float64(i)
+	}
+
+	sumChannel <- sum
+	allSumsInOne <- sum
+}
+
+func CalculateAllSums(allSumsInOne <-chan float64, sendSumOfSums chan float64) {
+	var sumOfSums float64 = 0
+	for sum := range allSumsInOne {
+		sumOfSums += sum
+	}
+
+	sendSumOfSums <- sumOfSums
+}

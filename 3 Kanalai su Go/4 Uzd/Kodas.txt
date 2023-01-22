@@ -1,0 +1,44 @@
+package main
+
+import "fmt"
+
+var threadsRan int = 0
+
+func main() {
+	var valueArray []int
+	var senderChan = make(chan int)
+
+	for threadNumber := 1; threadNumber <= 5; threadNumber++ {
+		go NumberSenders(threadNumber, senderChan)
+	}
+
+	for value := range senderChan {
+		if value == -1 {
+			threadsRan += 1
+			fmt.Println("Gijos darbas baigtas")
+
+			if threadsRan == 5 {
+				close(senderChan)
+				break
+			} else {
+				continue
+			}
+		}
+
+		valueArray = append(valueArray, value)
+	}
+
+	var sum int = 0
+	for _, value := range valueArray {
+		sum += value
+	}
+
+	fmt.Println("Suma sudejus visas gijas:", sum)
+}
+
+func NumberSenders(threadNumber int, senderChan chan int) {
+	for number := 0; number < 5*threadNumber; number++ {
+		senderChan <- number
+	}
+	senderChan <- -1
+}

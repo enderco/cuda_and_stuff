@@ -1,0 +1,75 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"math"
+	"math/rand"
+	"time"
+)
+
+type xy struct {
+	x float64
+	y float64
+}
+
+type kn struct {
+	k int
+	n int
+}
+
+func main() {
+	const taskai = 100000000
+	var threadCount = 5
+
+	m1 := [2][taskai]float64{}
+	for i := 0; i < 2; i++ {
+		for j := 0; j < taskai; j++ {
+			m1[i][j] = rand.Float64()
+		}
+	}
+	start := time.Now()
+	calcDataChannel := make(chan xy, threadCount)
+	calcResChannel := make(chan kn)
+	for i := 0; i < threadCount; i++ {
+		go calcThread(calcDataChannel, calcResChannel)
+	}
+
+	for i := 0; i < taskai; i++ {
+		calcDataChannel <- xy{m1[0][i], m1[1][i]}
+	}
+	close(calcDataChannel)
+
+	var k = 0
+	var n = 0
+	for i := 0; i < threadCount; i++ {
+		kn := <-calcResChannel
+		fmt.Print("K:N (atskiras)\n")
+		fmt.Print(kn.k, kn.n)
+		fmt.Print("\nSantykis\n")
+		fmt.Print((float64(kn.k) / float64(kn.n)) * 4)
+		fmt.Print("\n------------\n\n")
+		k += kn.k
+		n += kn.n
+	}
+	close(calcResChannel)
+	fmt.Print("K:N (susumuotas)\n")
+	fmt.Print(k, n)
+	fmt.Print("\nSantykis, padaugintas is 4\n")
+	fmt.Print((float64(k) / float64(n)) * 4)
+	fmt.Print("\n------------\n\n")
+	elapsed := time.Since(start)
+	log.Printf("Uztruko %s", elapsed)
+}
+
+func calcThread(calcDataChannel <-chan xy, calcResChannel chan<- kn) {
+	var k = 0
+	var n = 0
+	for points := range calcDataChannel {
+		k++
+		if math.Sqrt(math.Pow(points.x, 2)+math.Pow(points.y, 2)) <= 1 {
+			n++
+		}
+	}
+	calcResChannel <- kn{k, n}
+}

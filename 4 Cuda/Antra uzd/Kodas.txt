@@ -1,0 +1,85 @@
+%%cu
+#define __CUDACC__
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+#include <iostream>
+#include <stdio.h>
+
+#define intervalStart 1000
+#define intervalEnd 1999
+#define GPUBlocks 1
+#define GPUThreads 25
+#define resultsArraySize 1000
+
+__global__ void runOnGPU(int *index, int *resArray, int *maxValue)
+{
+    int threads = GPUBlocks * GPUThreads;
+    int perThread = resultsArraySize / 25;
+    int threadStart = threadIdx.x * perThread + intervalStart;
+    int threadEnd = ((threadIdx.x + 1) * perThread) + intervalStart;
+
+    for (int i = threadStart; i < threadEnd; i++) {
+        //printf("idx=%d, i=%d\n", threadIdx.x, i);
+ 
+        bool is_prime = true;
+        for (int j = 2; j < i; j++)
+            if (i % j == 0)
+                is_prime = false;
+
+        if (is_prime) {
+            //printf("skaicius %d yra pirminis skaicius\n", i);
+            int resIndex = atomicAdd(index, 1);
+            resArray[resIndex] = i;
+            atomicMax(maxValue, i);
+        }
+        else {
+            //printf("skaicius %d nera pirminis skaicius\n", i);
+        }
+    }
+}
+
+void primeNumberCudaPrep(int *resArray, int *maxValue) {
+    int* index = 0;
+    int* resArrayTemp = 0;  
+    int* maxValueTemp = 0;
+
+    cudaSetDevice(0);
+    cudaMalloc((void**)&index, sizeof(int));
+    cudaMalloc((void**)&resArrayTemp, resultsArraySize * sizeof(int));
+    cudaMalloc((void**)&maxValueTemp, sizeof(int));
+
+    cudaMemcpy(index, index, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(resArrayTemp, resArray, resultsArraySize * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(maxValueTemp, maxValue, sizeof(int), cudaMemcpyHostToDevice);
+
+    runOnGPU <<< GPUBlocks, GPUThreads >>> (index, resArrayTemp, maxValueTemp);
+
+    cudaMemcpy(resArray, resArrayTemp, resultsArraySize * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(maxValue, maxValueTemp, sizeof(int), cudaMemcpyDeviceToHost);
+
+    cudaDeviceSynchronize(); // laukiama kol gpu pabaigs visą savo darbą
+}
+
+int main()
+{
+    int resArray[resultsArraySize] = {};
+    int maxValue = 0;
+
+    primeNumberCudaPrep(resArray, &maxValue);
+
+    int kiekis = 0;
+    for (int i = 0; i < sizeof(resArray) / sizeof(int); i++) {
+        if (resArray[i] != 0) {
+            std::cout << resArray[i] << "\n";
+        }
+        else {
+            kiekis = i;
+            break;
+        }
+    }
+    std::cout << "Is viso pirminiu skaiciu yra " << kiekis << "\n";
+    std::cout << "Max reiksme " << maxValue << "\n";
+
+    cudaDeviceReset();
+    return 0;
+}

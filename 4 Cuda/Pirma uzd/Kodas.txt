@@ -1,0 +1,67 @@
+%%cu
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+
+#include <cstdio>
+
+__device__ int calculatePowerOfTwo(int number) {
+		return number * number;
+}
+
+__global__ void callFunctionsWithGPU(int* numbersSquared, int* index, int* maxNumber)
+{
+
+	for(; *index < 100; ) {
+		int resultIndex = atomicAdd(index, 1);
+
+		if(resultIndex < 100) {
+			int numberSquared = calculatePowerOfTwo(resultIndex);
+			atomicMax(maxNumber, numberSquared);
+			
+			numbersSquared[resultIndex] = numberSquared;	
+		}
+		
+	}
+}
+
+int main()
+{
+	size_t data_size = 100;
+	int* index = 0;
+
+	int *maxNumberDevice = 0;
+	int  maxNumberHost = INT_MIN;
+	int *numbersSquaredDevice;
+	int *numbersSquaredHost = (int*)malloc(data_size * sizeof(int));
+
+	for(int i = 0; i < 100; i++) {
+			numbersSquaredHost[i] = i;
+	}
+
+	cudaMalloc(&maxNumberDevice, sizeof(int));
+	cudaMalloc(&numbersSquaredDevice, data_size * sizeof(int));
+	cudaMalloc(&index, sizeof(int));
+
+	cudaMemcpy(maxNumberDevice, &maxNumberHost, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(index, index, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(numbersSquaredDevice, numbersSquaredHost, data_size * sizeof(int), cudaMemcpyHostToDevice);
+	
+	callFunctionsWithGPU<<<1, 3>>>(numbersSquaredDevice, index, maxNumberDevice);
+	cudaDeviceSynchronize();
+
+	cudaMemcpy(numbersSquaredHost, numbersSquaredDevice, data_size * sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(&maxNumberHost, maxNumberDevice, sizeof(int), cudaMemcpyDeviceToHost);
+
+	for(int i = 0; i < 100; i++) {
+			printf("%d\n", numbersSquaredHost[i]);
+	}
+
+	printf("Didziausias skaicius: %d", maxNumberHost);
+
+	cudaFree(numbersSquaredHost);
+	cudaFree(numbersSquaredDevice);
+	cudaFree(index);
+	cudaFree(maxNumberDevice);
+	
+	return 0;
+}
